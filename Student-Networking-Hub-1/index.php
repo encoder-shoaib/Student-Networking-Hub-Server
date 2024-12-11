@@ -1,6 +1,20 @@
 <?php
+
+// Database connection
+$servername = "localhost";
+$username = "root";
+$password = "";
+$dbname = "student_networking_hub";
+// Start the session
 session_start();
 include('db.php');  // Ensure you have a db.php that connects to your database
+$conn = new mysqli($servername, $username, $password, $dbname);
+
+if ($conn->connect_error) {
+    die("Connection failed: " . $conn->connect_error);
+}
+
+
 
 // Assuming you already fetched user data
 // Example user data fetching process
@@ -19,37 +33,35 @@ if (!$user) {
 $email = $user['email'];  // User email fetched from database
 // Generate the Gravatar URL using the MD5 hash of the user's email address
 $gravatar_url = "https://www.gravatar.com/avatar/" . md5(strtolower(trim($email))) . "?s=200&d=mp";
- 
-// for post code 
-$servername = "localhost";
-$username = "root";
-$password = "";
-$dbname = "student_networking_hub";
 
-$conn = new mysqli($servername, $username, $password, $dbname);
 
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
-}
 
 // Handle new post submission
 if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_FILES["post_image"])) {
+    // Assuming user is logged in and user data is available in session
+    $user_id = $_SESSION['user_id'];  // Get the logged-in user's ID
+    $query = "SELECT email FROM users WHERE id = $user_id";  // Fetch user email
+    $result = mysqli_query($conn, $query);
+    $user = mysqli_fetch_assoc($result);
+
+    $email = $user['email'];  // User's email
+    // Fetch other post data
     $username = $_POST['username'];
     $content = $_POST['content'];
-    
-    // Upload the image
+
+    // Handle image upload
     $image_name = $_FILES["post_image"]["name"];
     $image_tmp_name = $_FILES["post_image"]["tmp_name"];
     $image_folder = "uploads/" . basename($image_name);
 
     if (move_uploaded_file($image_tmp_name, $image_folder)) {
-        // Insert post into database
-        $stmt = $conn->prepare("INSERT INTO posts (username, profile_picture, content, image) VALUES (?, ?, ?, ?)");
-        $stmt->bind_param("ssss", $username, $profile_picture, $content, $image_folder);
-        $profile_picture = "path_to_default_profile_picture";
+        // Insert post into the database, including the email
+        $stmt = $conn->prepare("INSERT INTO posts (username, profile_picture, content, image, email) VALUES (?, ?, ?, ?, ?)");
+        $stmt->bind_param("sssss", $username, $profile_picture, $content, $image_folder, $email);
+        $profile_picture = "path_to_default_profile_picture"; // Replace with actual profile picture if available
         $stmt->execute();
         $stmt->close();
- 
+
         // Redirect to the index page after successful post submission
         header("Location: index.php");
         exit();
@@ -59,8 +71,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_FILES["post_image"])) {
 // Fetch posts
 $sql = "SELECT * FROM posts ORDER BY created_at DESC";
 $result = $conn->query($sql);
-
 ?>
+
+<!-- Continue with your HTML and display posts code -->
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -68,11 +82,13 @@ $result = $conn->query($sql);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Home</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- font awesome cdn  -->
+    <script src="https://kit.fontawesome.com/8bcfb398b0.js" crossorigin="anonymous"></script> 
 </head>
 <body class="bg-gray-100 h-screen">
 
     <!-- Navbar -->
-    <nav class="bg-gray-800 p-4 fixed w-full z-10 sticky top-0">
+    <nav class="bg-gray-800 p-4 fixed w-full z-10 sticky top-0 mb-1">
         <div class="container mx-auto flex justify-between items-center">
             <div class="flex items-center">
                 <img class="w-10 mr-3" src="./src/graduation-cap.png" alt="Graduation Cap">
@@ -84,10 +100,19 @@ $result = $conn->query($sql);
                 <a href="#" class="text-gray-300 hover:text-white px-4">Services</a>
                 <a href="#" class="text-gray-300 hover:text-white px-4">Contact</a>
             </div>
-            <div class="relative md:ml-4 flex gap-4">
-                <input type="text" class="bg-white text-gray-900 px-4 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Search">
-                <div class="text-white">
-                    <a href="./login.html" class="hover:underline">Log Out</a>
+
+            <!-- Search Container -->
+             <div class="search-container">
+                    <div class="relative md:ml-4 flex gap-4">
+                        <input id="searchInput" type="text" class="bg-white text-gray-900 px-4 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Search">
+                     <div>
+                            <button id="searchButton" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-full">Search</button>
+                    </div>
+                </div>
+            </div>
+
+                <div class="text-white flex justify-between items-center">
+                    <a href="./login.html" class="hover:underline" class="ps-4">Log Out</a>
                 </div>
             </div>
             <div class="md:hidden">
@@ -100,15 +125,6 @@ $result = $conn->query($sql);
         </div>
     </nav>
 
-    <!-- Newsfeed -->
-    <div class="md:container mx-auto">
-        <div class="flex items-center justify-center p-4 mb-8 bg-white">
-            <img src="<?php echo $gravatar_url; ?>" alt="Profile Picture" class="w-14 h-14 rounded-full border-4 border-white">
-            <div class="flex flex-grow">
-                <input type="text" class="bg-gray-200 text-gray-900 rounded-full px-4 py-1 me-3 flex-grow" placeholder="Share your thoughts...">
-                <button class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-full">Share</button>
-            </div>
-        </div>
         
     <!-- Header -->
     <section class="lg:px-16 px-5 lg:px-36 lg:flex justify-center pt-18 mb-28">
@@ -131,108 +147,6 @@ $result = $conn->query($sql);
                     </div>
                 </div>
 
-                <div class="card p-6 my-8 bg-white shadow-xl">
-                    <h4 class="text-xl font-bold pb-4">Page you may like</h4>
-                    <div>
-                        <ul>
-                            <div class="flex items-center justify-between mb-4">
-                                <div class="block">
-                                    <a href="#">
-                                        <figure>
-                                            <img src="./src/profile-1.webp" alt="profile picture" class="rounded-full w-9 h-9">
-                                        </figure>
-                                    </a>
-                                </div>
-                            
-                                <div class="ml-4 block">
-                                    <h3><a href="#" class="text-blue-500">Travel The World</a></h3>
-                                    <p><a href="#" class="text-gray-500">adventure</a></p>
-                                </div>
-                            
-                                <div class="block">
-                                    <button class="relative w-6 h-6">
-                                        <img src="./src/heart-color.webp" alt="" class="w-full h-full absolute inset-0">
-                                        <img src="./src/heart.webp" alt="" class="w-full h-full absolute inset-0 opacity-0 hover:opacity-100">
-                                    </button>
-                                </div>
-                                
-                            </div>
-                            <div class="flex items-center justify-between mb-4">
-                                <div class="block">
-                                    <a href="#">
-                                        <figure>
-                                            <img src="./src/profile-35x35-4.webp" alt="profile picture" class="rounded-full w-9 h-9">
-                                        </figure>
-                                    </a>
-                                </div>
-                            
-                                <div class="ml-4 block">
-                                    <h3><a href="#" class="text-blue-500">Travel The World</a></h3>
-                                    <p><a href="#" class="text-gray-500">adventure</a></p>
-                                </div>
-                            
-                                <div class="block">
-                                    <button class="relative w-6 h-6">
-                                        <img src="./src/heart-color.webp" alt="" class="w-full h-full absolute inset-0">
-                                        <img src="./src/heart.webp" alt="" class="w-full h-full absolute inset-0 opacity-0 hover:opacity-100">
-                                    </button>
-                                </div>
-                                
-                            </div>
-                            <div class="flex items-center justify-between mb-4">
-                                <div class="block">
-                                    <a href="#">
-                                        <figure>
-                                            <img src="./src/profile-35x35-7 (1).webp" alt="profile picture" class="rounded-full w-9 h-9">
-                                        </figure>
-                                    </a>
-                                </div>
-                            
-                                <div class="ml-4 block">
-                                    <h3><a href="#" class="text-blue-500">Travel The World</a></h3>
-                                    <p><a href="#" class="text-gray-500">adventure</a></p>
-                                </div>
-                            
-                                <div class="block">
-                                    <button class="relative w-6 h-6">
-                                        <img src="./src/heart-color.webp" alt="" class="w-full h-full absolute inset-0">
-                                        <img src="./src/heart.webp" alt="" class="w-full h-full absolute inset-0 opacity-0 hover:opacity-100">
-                                    </button>
-                                </div>
-                                
-                            </div>
-                            <div class="flex items-center justify-between mb-4">
-                                <div class="block">
-                                    <a href="#">
-                                        <figure>
-                                            <img src="./src/profile-35x35-9.webp" alt="profile picture" class="rounded-full w-9 h-9">
-                                        </figure>
-                                    </a>
-                                </div>
-                            
-                                <div class="ml-4 block">
-                                    <h3><a href="#" class="text-blue-500">Travel The World</a></h3>
-                                    <p><a href="#" class="text-gray-500">adventure</a></p>
-                                </div>
-                            
-                                <div class="block">
-                                    <button class="relative w-6 h-6">
-                                        <img src="./src/heart-color.webp" alt="" class="w-full h-full absolute inset-0">
-                                        <img src="./src/heart.webp" alt="" class="w-full h-full absolute inset-0 opacity-0 hover:opacity-100">
-                                    </button>
-                                </div>
-                                
-                            </div>
-
-                            
-                            
-                        </ul>
-                    </div>
-                </div>
-                
-                
-                
-
             </div>
 
             <!-- newsfeed -->
@@ -250,12 +164,18 @@ $result = $conn->query($sql);
 
 <!--*********************************************** -->
 
+            <section  id = "search-hide" class="relative z-10 flex-col mx-20 justify-center items-center  hidden">
+                <div id="results" class="results bg-white p-20 border rounded-xl">
+                            <!-- Search results will appear here -->
+                </div>
+                <button type="button" id='search-cancel' class="mt-3 inline-flex  justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto">Cancel</button>
+            </section>
 
+<!--*********************************************** -->
 
-
-        <!-- Display Posts -->
+    <!-- Display Posts -->
         <?php while ($row = $result->fetch_assoc()): ?>
-            <div class="card bg-white shadow-xl flex flex-col p-6 mb-6 rounded-lg">
+            <div class="card bg-white shadow-xl flex flex-col p-6 mb-6 rounded-lg lg:w-[800px]">
                 <div class="flex items-center mb-4">
                 <img src="<?php echo $gravatar_url; ?>" alt="Profile Picture" class="w-14 h-14 rounded-full border-4 border-white">
                     <div>
@@ -274,122 +194,26 @@ $result = $conn->query($sql);
                 <div class="flex items-center justify-between mt-6">
                     <div class="flex items-center space-x-4">
                         <button class="flex items-center space-x-2 text-gray-500 hover:text-blue-500 transition duration-150">
-                            <img class="w-6" src="./src/heart.png" alt="Like">
+                        <i class="fa-regular fa-heart"></i>
                             <span>24</span>
                         </button>
                         <button class="flex items-center space-x-2 text-gray-500 hover:text-blue-500 transition duration-150">
-                            <img class="w-6" src="./src/comment.png" alt="Comment">
+                        <i class="fa-regular fa-comment"></i>
                             <span>16</span>
                         </button>
                     </div>
                     <div>
                         <button class="flex items-center space-x-2 text-gray-500 hover:text-blue-500 transition duration-150">
-                            <img class="w-6" src="./src/share.png" alt="Share">
+                        <i class="fa-solid fa-share"></i>
                             <span>20</span>
                         </button>
                     </div>
                 </div>
             </div>
         <?php endwhile; ?>
-                <div class="card lg:w-[700px] bg-white shadow-xl flex flex-col p-6 my-8">
-                    <div class="flex items-center">
-                        <img src="./src/profile-small-1.webp" alt="Profile Picture"
-                            class="w-10 h-10 rounded-full mr-4">
-                        <div>
-                            <h2 class="font-semibold">John Doe</h2>
-                            <p class="text-gray-500">2 hours ago</p>
-                        </div>
-                    </div>
-                    <div class="card-body flex-1 py-5">
-                        <p>Many desktop publishing packages and web page editors now use Lorem Ipsum as their default
-                            model text, and a search for 'lorem ipsum' will uncover many web sites still in their
-                            infancy.</p>
-                    </div>
-                    <figure>
-                        <img src="./src/job.jpg" alt="Shoes"
-                            class="w-full h-full rounded-xl object-cover">
-                    </figure>
-                    <div class="flex items-center justify-between mt-4">
-                        <div class="flex items-center space-x-4">
-                            <button class="flex items-center space-x-2">
-                                <img class="w-6" src="./src/heart.png" alt="">
-
-                                <span class="text-gray-500">24</span>
-                            </button>
-                            <button class="flex items-center space-x-2">
-                                <img class="w-6" src="./src/comment.png" alt="">
-                                <span class="text-gray-500">16</span>
-                            </button>
-                        </div>
-                        <div>
-                            <button class="flex items-center space-x-2">
-                                <img class="w-6" src="./src/share.png" alt="">
-                                <span class="text-gray-500">20</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
 
             </div>
 
-
-            <div class="hidden lg:block">
-                <div class="card lg:w-[270px] w-80 bg-white shadow-xl flex flex-col">
-                    <h1 class="text-xl p-3 ps-5 font-bold">Recent Notifications</h1>
-                    <div class="px-2">
-                        <div class="flex items-center p-4">
-                            <img src="./src/profile-35x35-9.webp" alt="Profile Picture"
-                                class="w-10 h-10 rounded-full mr-4">
-                            <div>
-                                <h2 class="font-semibold">Any one can join with us if you want</h2>
-                                <p class="text-gray-500">2 hours ago</p>
-                            </div>
-                        </div>
-                        <div class="flex items-center p-4">
-                            <img src="./src/profile-35x35-8.webp" alt="Profile Picture"
-                                class="w-10 h-10 rounded-full mr-4">
-                            <div>
-                                <h2 class="font-semibold">Any one can join with us if you want</h2>
-                                <p class="text-gray-500">2 hours ago</p>
-                            </div>
-                        </div>
-                        <div class="flex items-center p-4">
-                            <img src="./src/profile-35x35-7.webp" alt="Profile Picture"
-                                class="w-10 h-10 rounded-full mr-4">
-                            <div>
-                                <h2 class="font-semibold">Any one can join with us if you want</h2>
-                                <p class="text-gray-500">2 hours ago</p>
-                            </div>
-                        </div>
-                        <div class="flex items-center p-4">
-                            <img src="./src/profile-35x35-6.webp" alt="Profile Picture"
-                                class="w-10 h-10 rounded-full mr-4">
-                            <div>
-                                <h2 class="font-semibold">Any one can join with us if you want</h2>
-                                <p class="text-gray-500">2 hours ago</p>
-                            </div>
-                        </div>
-                        <div class="flex items-center p-4">
-                            <img src="./src/profile-35x35-4.webp" alt="Profile Picture"
-                                class="w-10 h-10 rounded-full mr-4">
-                            <div>
-                                <h2 class="font-semibold">Any one can join with us if you want</h2>
-                                <p class="text-gray-500">2 hours ago</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="bg-white lg:w-[270px]  shadow-lg p-6 my-8">
-                    <h4 class="text-lg font-bold mb-4">Advertizement</h4> 
-                    <div class="mt-4">
-                        <a href="#" class="block">
-                            <img src="./src/add-2.jpg" alt="advertisement" class="w-full h-auto rounded">
-                        </a>
-                    </div>
-                </div>
-                
-
-            </div>
         </div>
 
     </div>
@@ -423,6 +247,3 @@ $result = $conn->query($sql);
 <script src="js/home.js"></script>
 </body>
 </html>
-
-
-
